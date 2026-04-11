@@ -12,11 +12,10 @@ if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
 
 const router = express.Router();
 
-// Construct Redirect URI safely (remove trailing slash if present)
-const backendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+// Construct Redirect URI safely
+// Priority: Render Auto URL -> Manual Env Var -> Localhost
+const backendUrl = (process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
 const REDIRECT_URI = `${backendUrl}/auth/google/callback`;
-
-console.log("Google OAuth Redirect URI:", REDIRECT_URI);
 
 const client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
@@ -56,12 +55,15 @@ router.get("/google", (req, res) => {
     scope: ["profile", "email"],
     redirect_uri: REDIRECT_URI
   });
+  console.log("Google OAuth Redirect URI:", REDIRECT_URI);
+
   res.json({ url: authUrl });
 });
 
 // Handle Google Callback
 router.get("/google/callback", async (req, res) => {
   const { code } = req.query;
+console.log("Google OAuth Redirect URI:", REDIRECT_URI);
 
   if (!code) {
     return res.redirect(`${process.env.FRONTEND_URL || "http://localhost:3000"}/login?error=no_code`);
