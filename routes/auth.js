@@ -16,6 +16,8 @@ const router = express.Router();
 const backendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
 const REDIRECT_URI = `${backendUrl}/auth/google/callback`;
 
+console.log("Google OAuth Redirect URI:", REDIRECT_URI);
+
 const client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
