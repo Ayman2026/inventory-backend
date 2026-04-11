@@ -11,10 +11,15 @@ if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
 }
 
 const router = express.Router();
+
+// Construct Redirect URI safely (remove trailing slash if present)
+const backendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
+const REDIRECT_URI = `${backendUrl}/auth/google/callback`;
+
 const client = new OAuth2Client(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
-  `${process.env.BACKEND_URL || 'http://localhost:5000'}/auth/google/callback`
+  REDIRECT_URI
 );
 
 // DEMO LOGIN (Temporary - for testing without Google)
@@ -47,7 +52,7 @@ router.get("/google", (req, res) => {
   const authUrl = client.generateAuthUrl({
     access_type: "offline",
     scope: ["profile", "email"],
-    prompt: "consent"
+    redirect_uri: REDIRECT_URI
   });
   res.json({ url: authUrl });
 });
