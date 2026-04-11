@@ -10,8 +10,11 @@ const authRoutes = require("./routes/auth");
 const authMiddleware = require("./middleware/auth");
 
 const app = express();
+
+// CORS configuration - handles trailing slash variations
+const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: [frontendUrl, frontendUrl + "/"],
   credentials: true
 }));
 app.use(express.json());
