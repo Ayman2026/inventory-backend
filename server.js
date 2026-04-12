@@ -56,6 +56,37 @@ app.get("/products", authMiddleware, async (req, res) => {
   }
 });
 
+// Download products as CSV (user's only)
+app.get("/products/download", authMiddleware, async (req, res) => {
+  try {
+    const products = await Product.find({ userId: req.user.id }).sort({ name: 1 });
+
+    const csvHeader = "Name,Quantity,Price,Total Worth,Min Stock,Category,Date Added\n";
+    const csvRows = products.map(product => {
+      const name = `"${(product.name || '').replace(/"/g, '""')}"`;
+      const quantity = product.quantity || 0;
+      const price = product.price || 0;
+      const totalWorth = quantity * price;
+      const minStock = product.minStock || 0;
+      const category = `"${(product.category || '').replace(/"/g, '""')}"`;
+      const date = new Date(product.createdAt).toISOString();
+      return `${name},${quantity},${price},${totalWorth},${minStock},${category},${date}`;
+    }).join("\n");
+
+    // Calculate grand total
+    const grandTotal = products.reduce((sum, p) => sum + ((p.quantity || 0) * (p.price || 0)), 0);
+    const totalRow = `\nGRAND TOTAL,,,,${grandTotal},,`;
+
+    const csv = csvHeader + csvRows + totalRow;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=products_export.csv");
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Update product
 app.put("/products/:id", authMiddleware, async (req, res) => {
   try {
