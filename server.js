@@ -126,6 +126,31 @@ app.delete("/history", authMiddleware, async (req, res) => {
   }
 });
 
+// Download history as CSV (user's only)
+app.get("/history/download", authMiddleware, async (req, res) => {
+  try {
+    const entries = await History.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    
+    const csvHeader = "Product,Change,Time,Note,Date\n";
+    const csvRows = entries.map(entry => {
+      const name = `"${(entry.name || '').replace(/"/g, '""')}"`;
+      const change = `"${(entry.change || '').replace(/"/g, '""')}"`;
+      const time = `"${(entry.time || '').replace(/"/g, '""')}"`;
+      const note = `"${(entry.note || '').replace(/"/g, '""')}"`;
+      const date = new Date(entry.createdAt).toISOString();
+      return `${name},${change},${time},${note},${date}`;
+    }).join("\n");
+    
+    const csv = csvHeader + csvRows;
+    
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=history_export.csv");
+    res.send(csv);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(process.env.PORT || 5000, () => {
   console.log(`Server started on port ${process.env.PORT || 5000}`);
 });
