@@ -215,6 +215,45 @@ app.get("/history/download", authMiddleware, async (req, res) => {
   }
 });
 
+// Get top movers - products with highest stock movement velocity
+app.get("/history/top-movers", authMiddleware, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const entries = await History.find({ userId: req.user.id }).sort({ createdAt: -1 });
+
+    // Aggregate movements per product
+    const movements = {};
+    entries.forEach(entry => {
+      const name = entry.name;
+      if (!movements[name]) {
+        movements[name] = { name, totalMoved: 0, transactions: 0, lastActivity: entry.createdAt };
+      }
+      movements[name].transactions += 1;
+
+      // Parse the change value (e.g., "+50" -> 50, "-20" -> 20, "Updated Product" -> 0)
+      let moved = 0;
+      if (entry.change.startsWith("+")) {
+        moved = parseInt(entry.change.replace("+", "")) || 0;
+      } else if (entry.change.startsWith("-")) {
+        moved = Math.abs(parseInt(entry.change.replace("-", "")) || 0);
+      }
+      movements[name].totalMoved += moved;
+      movements[name].lastActivity = new Date(entry.createdAt) > new Date(movements[name].lastActivity) 
+        ? entry.createdAt 
+        : movements[name].lastActivity;
+    });
+
+    // Convert to array and sort by total movement
+    const topMovers = Object.values(movements)
+      .sort((a, b) => b.totalMoved - a.totalMoved)
+      .slice(0, parseInt(limit));
+
+    res.json(topMovers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(process.env.PORT || 5000, () => {
   console.log(`Server started on port ${process.env.PORT || 5000}`);
 });
