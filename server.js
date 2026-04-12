@@ -129,10 +129,43 @@ app.delete("/history", authMiddleware, async (req, res) => {
 // Download history as CSV (user's only)
 app.get("/history/download", authMiddleware, async (req, res) => {
   try {
-    const entries = await History.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    const { name, dateFrom, dateTo, type } = req.query;
     
+    const filter = { userId: req.user.id };
+    
+    // Name filter
+    if (name) {
+      filter.name = { $regex: name, $options: "i" };
+    }
+    
+    // Date filter
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) {
+        filter.createdAt.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = toDate;
+      }
+    }
+    
+    const entries = await History.find(filter).sort({ createdAt: -1 });
+    
+    // Type filter (applied after query since it's based on change content)
+    let filtered = entries;
+    if (type && type !== "all") {
+      filtered = entries.filter(entry => {
+        if (type === "add") return entry.change.startsWith("+");
+        if (type === "subtract") return entry.change.startsWith("-");
+        if (type === "update") return entry.change.includes("Updated");
+        return true;
+      });
+    }
+
     const csvHeader = "Product,Change,Time,Note,Date\n";
-    const csvRows = entries.map(entry => {
+    const csvRows = filtered.map(entry => {
       const name = `"${(entry.name || '').replace(/"/g, '""')}"`;
       const change = `"${(entry.change || '').replace(/"/g, '""')}"`;
       const time = `"${(entry.time || '').replace(/"/g, '""')}"`;
@@ -140,9 +173,9 @@ app.get("/history/download", authMiddleware, async (req, res) => {
       const date = new Date(entry.createdAt).toISOString();
       return `${name},${change},${time},${note},${date}`;
     }).join("\n");
-    
+
     const csv = csvHeader + csvRows;
-    
+
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", "attachment; filename=history_export.csv");
     res.send(csv);
