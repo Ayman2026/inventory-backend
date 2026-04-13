@@ -14,15 +14,14 @@ const suggestionSchema = new mongoose.Schema({
   },
   title: { type: String, required: true },
   description: { type: String, required: true },
-  action: { type: String }, // Suggested action
-  impact: { type: String }, // Expected impact
-  productName: { type: String }, // Related product (if any)
-  data: { type: Object }, // Supporting data/metrics
+  action: { type: String },
+  impact: { type: String },
+  productName: { type: String },
+  data: { type: Object },
   dismissed: { type: Boolean, default: false },
   actedUpon: { type: Boolean, default: false }
 }, { timestamps: true });
 
-// Index for faster queries
 suggestionSchema.index({ userId: 1, createdAt: -1 });
 suggestionSchema.index({ userId: 1, dismissed: 1 });
 

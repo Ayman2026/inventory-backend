@@ -135,7 +135,7 @@ class AISuggestionEngine {
           suggestions.push({
             type: 'reorder',
             priority: 'high',
-            title: `🚨 Urgent: ${product.name} will run out in ${Math.round(daysUntilEmpty)} days`,
+            title: `Urgent: ${product.name} will run out in ${Math.round(daysUntilEmpty)} days`,
             description: `Based on consumption rate of ${dailyConsumption.toFixed(1)} units/day, you'll run out of ${product.name} soon. Current stock: ${product.quantity}, Min threshold: ${product.minStock}`,
             action: `Order at least ${Math.ceil(dailyConsumption * 14)} units to cover 2 weeks`,
             impact: `Prevents stockout and potential lost sales`,
@@ -152,7 +152,7 @@ class AISuggestionEngine {
           suggestions.push({
             type: 'reorder',
             priority: 'medium',
-            title: `⚠️ ${product.name} is below minimum stock`,
+            title: `${product.name} is below minimum stock`,
             description: `Current quantity (${product.quantity}) is below your minimum threshold (${product.minStock}). Consider restocking soon.`,
             action: `Reorder to reach at least ${product.minStock * 2} units`,
             impact: `Maintains healthy stock levels`,
@@ -187,7 +187,7 @@ class AISuggestionEngine {
           suggestions.push({
             type: 'dead_stock',
             priority: 'medium',
-            title: `📦 ${product.name} has zero movement in ${Math.round(daysSinceAdded)} days`,
+            title: `${product.name} has zero movement in ${Math.round(daysSinceAdded)} days`,
             description: `This product was added ${Math.round(daysSinceAdded)} days ago and hasn't had any stock movements. You have ${product.quantity} units worth ₹${tiedUpCapital.toLocaleString()} tied up.`,
             action: `Consider discounting by 20-30% or bundling with popular items`,
             impact: `Frees up ₹${tiedUpCapital.toLocaleString()} in capital and storage space`,
@@ -210,7 +210,7 @@ class AISuggestionEngine {
           suggestions.push({
             type: 'dead_stock',
             priority: 'low',
-            title: `📦 ${product.name} inactive for ${Math.round(daysSinceMovement)} days`,
+            title: `${product.name} inactive for ${Math.round(daysSinceMovement)} days`,
             description: `Last activity was ${Math.round(daysSinceMovement)} days ago. You still have ${product.quantity} units in stock.`,
             action: `Review if this product should remain in inventory`,
             impact: `Optimize inventory and reduce holding costs`,
@@ -264,7 +264,7 @@ class AISuggestionEngine {
         suggestions.push({
           type: 'fast_mover',
           priority: 'high',
-          title: `🔥 ${name} is a fast mover (${data.transactions} transactions)`,
+          title: `${name} is a fast mover (${data.transactions} transactions)`,
           description: `${name} has moved ${data.totalMoved} units across ${data.transactions} transactions. This is one of your most active products.`,
           action: `Consider increasing stock buffer to ${Math.ceil(product.minStock * 1.5)} and negotiating bulk purchase discounts`,
           impact: `Maximize revenue on high-demand product`,
@@ -298,7 +298,7 @@ class AISuggestionEngine {
         suggestions.push({
           type: 'pricing',
           priority: 'medium',
-          title: `💰 ${product.name} is priced ${Math.round(priceDiff)}% above average`,
+          title: `${product.name} is priced ${Math.round(priceDiff)}% above average`,
           description: `At ₹${product.price} per unit, this product is significantly above your average of ₹${avgPrice.toFixed(2)}. Current stock value: ₹${productValue.toLocaleString()}.`,
           action: `Monitor sales velocity. If moving slowly, consider price reduction. If fast, maintain or increase.`,
           impact: `Optimize profit margins`,
@@ -318,7 +318,7 @@ class AISuggestionEngine {
       suggestions.push({
         type: 'pricing',
         priority: 'low',
-        title: `📊 Review pricing strategy for portfolio`,
+        title: `Review pricing strategy for portfolio`,
         description: `You have ${products.length} products with total inventory value of ₹${totalValue.toLocaleString()}. Consider implementing tiered pricing (budget, standard, premium) to capture different customer segments.`,
         action: `Categorize products into 3 price tiers and adjust margins accordingly`,
         impact: `Potential 10-15% revenue increase with optimized pricing`,
@@ -371,7 +371,7 @@ class AISuggestionEngine {
       suggestions.push({
         type: 'seasonal',
         priority: 'medium',
-        title: `📅 Seasonal pattern detected`,
+        title: `Seasonal pattern detected`,
         description: `Your busiest month was ${peakMonth[0]} with ${peakMonth[1].transactions} transactions. Slowest was ${lowMonth[0]} with ${lowMonth[1].transactions} transactions.`,
         action: `Plan inventory buildup 2-3 weeks before peak months. Reduce orders during slow periods.`,
         impact: `Better stock availability during high-demand periods`,
@@ -430,7 +430,7 @@ class AISuggestionEngine {
       suggestions.push({
         type: 'bundle',
         priority: 'low',
-        title: `🎁 Bundle opportunity: ${bundle}`,
+        title: `Bundle opportunity: ${bundle}`,
         description: `These products are often updated together (${count} times). Consider offering them as a bundle with a 10-15% discount.`,
         action: `Create a bundle deal to increase average order value`,
         impact: `Higher customer satisfaction and increased sales`,
@@ -475,7 +475,7 @@ class AISuggestionEngine {
           suggestions.push({
             type: 'clearance',
             priority: 'low',
-            title: `🏷️ ${product.name} is overstocked (${product.quantity} units)`,
+            title: `${product.name} is overstocked (${product.quantity} units)`,
             description: `At current sales rate, it will take ${Math.round(monthsToSellout)} months to sell current stock. You have ₹${excessValue.toLocaleString()} in excess inventory.`,
             action: `Run a clearance sale with 30-40% discount to free up space and capital`,
             impact: `Recover ₹${Math.round(excessValue * 0.6).toLocaleString()} and reduce holding costs`,
@@ -529,7 +529,7 @@ class AISuggestionEngine {
         suggestions.push({
           type: 'trend',
           priority: 'high',
-          title: `📈 ${name} is trending up (${Math.round(change)}% increase)`,
+          title: `${name} is trending up (${Math.round(change)}% increase)`,
           description: `Activity for ${name} increased from ${older} to ${recent} transactions. This product is gaining momentum.`,
           action: `Increase stock levels and consider marketing this product more aggressively`,
           impact: `Capitalize on growing demand`,
@@ -618,7 +618,7 @@ class AISuggestionEngine {
         suggestions.push({
           type: 'trend',
           priority: 'high',
-          title: `🎯 Focus on ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
+          title: `Focus on ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
           description: `This is your strongest product with ${metrics.transactionCount} transactions, ₹${metrics.totalValue.toLocaleString()} in stock value, and ${metrics.turnoverRate}x turnover rate. It deserves more investment and attention.`,
           action: `Increase stock buffer to ${Math.ceil(product.minStock * 2)}, consider bulk purchasing discounts, and feature this product prominently`,
           impact: `Maximize returns on your best-performing product`,
@@ -652,7 +652,7 @@ class AISuggestionEngine {
         suggestions.push({
           type: 'dead_stock',
           priority: 'medium',
-          title: `⚠️ Reconsider ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
+          title: `Reconsider ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
           description: `${reason}. This product has ₹${tiedCapital.toLocaleString()} tied up in inventory with minimal activity. Consider if this product deserves continued investment.`,
           action: `Either discontinue, liquidate at discount, or drastically reduce stock levels to free up ₹${tiedCapital.toLocaleString()}`,
           impact: `Reallocate capital to higher-performing products`,
@@ -686,7 +686,7 @@ class AISuggestionEngine {
       suggestions.push({
         type: 'pricing',
         priority: 'low',
-        title: `📊 Portfolio Health: ${avgScore >= 50 ? 'Healthy' : 'Needs Work'} (Avg Score: ${Math.round(avgScore)}/100)`,
+        title: `Portfolio Health: ${avgScore >= 50 ? 'Healthy' : 'Needs Work'} (Avg Score: ${Math.round(avgScore)}/100)`,
         description: `You have ${products.length} products. ${highPerformers} are high-performers, ${lowPerformers} are underperformers. ${portfolioAdvice}`,
         action: `Aim for 70%+ of products scoring above 50. Consider the 80/20 rule - 20% of products likely generate 80% of your results`,
         impact: `Optimize product mix for maximum profitability`,
