@@ -239,43 +239,46 @@ app.get("/history/download", authMiddleware, async (req, res) => {
   }
 });
 
-// Get top movers - products with highest stock movement velocity (Optimized with aggregation)
+// Get top movers - products with highest stock movement velocity (Optimized)
 app.get("/history/top-movers", authMiddleware, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
 
-    // Use MongoDB aggregation pipeline for efficiency
-    const topMovers = await History.aggregate([
-      { $match: { userId: req.user.id } },
-      {
-        $group: {
-          _id: "$name",
-          totalMoved: {
-            $sum: {
-              $abs: {
-                $toDouble: {
-                  $substr: ["$change", 1, { $strLenCP: "$change" }]
-                }
-              }
-            }
-          },
-          transactions: { $sum: 1 },
-          lastActivity: { $max: "$createdAt" }
-        }
-      },
-      { $sort: { totalMoved: -1 } },
-      { $limit: parseInt(limit) }
-    ]);
+    // Fetch history and process in Node.js (more reliable than complex aggregation)
+    const entries = await History.find({ userId: req.user.id })
+      .sort({ createdAt: -1 })
+      .limit(1000); // Limit to last 1000 entries for performance
 
-    // Format response to match existing structure
-    const formattedMovers = topMovers.map(mover => ({
-      name: mover._id,
-      totalMoved: Math.round(mover.totalMoved),
-      transactions: mover.transactions,
-      lastActivity: mover.lastActivity
-    }));
+    // Aggregate movements per product
+    const movements = {};
+    entries.forEach(entry => {
+      const name = entry.name;
+      if (!movements[name]) {
+        movements[name] = { name, totalMoved: 0, transactions: 0, lastActivity: entry.createdAt };
+      }
+      movements[name].transactions += 1;
 
-    res.json(formattedMovers);
+      // Parse the change value (e.g., "+50" -> 50, "-20" -> 20, "Updated Product" -> 0)
+      let moved = 0;
+      if (entry.change.startsWith("+")) {
+        moved = parseInt(entry.change.replace("+", "")) || 0;
+      } else if (entry.change.startsWith("-")) {
+        moved = Math.abs(parseInt(entry.change.replace("-", "")) || 0);
+      }
+      movements[name].totalMoved += moved;
+      
+      // Update last activity if this is more recent
+      if (new Date(entry.createdAt) > new Date(movements[name].lastActivity)) {
+        movements[name].lastActivity = entry.createdAt;
+      }
+    });
+
+    // Convert to array, sort by total movement, and limit
+    const topMovers = Object.values(movements)
+      .sort((a, b) => b.totalMoved - a.totalMoved)
+      .slice(0, parseInt(limit));
+
+    res.json(topMovers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
