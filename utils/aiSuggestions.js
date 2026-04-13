@@ -23,6 +23,7 @@ class AISuggestionEngine {
     suggestions.push(...this.suggestBundles(products, history));
     suggestions.push(...this.identifyClearanceCandidates(products, history));
     suggestions.push(...this.analyzeTrends(products, history));
+    suggestions.push(...this.recommendProductFocus(products, history));
 
     // Sort by priority (high > medium > low)
     const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -468,6 +469,164 @@ class AISuggestionEngine {
         });
       }
     });
+
+    return suggestions;
+  }
+
+  /**
+   * 9. PRODUCT FOCUS RECOMMENDATIONS - Which products to focus on
+   */
+  recommendProductFocus(products, history) {
+    const suggestions = [];
+
+    if (products.length === 0) return suggestions;
+
+    // Calculate metrics for each product
+    const productMetrics = products.map(product => {
+      const productHistory = history.filter(h => h.name === product.name);
+      
+      // Calculate movement metrics
+      const additions = productHistory.filter(h => h.change.startsWith('+'));
+      const subtractions = productHistory.filter(h => h.change.startsWith('-'));
+      
+      let totalAdded = 0, totalSubtracted = 0;
+      additions.forEach(h => totalAdded += parseInt(h.change.replace('+', '')) || 0);
+      subtractions.forEach(h => totalSubtracted += Math.abs(parseInt(h.change.replace('-', '')) || 0));
+      
+      const totalValue = product.quantity * product.price;
+      const turnoverRate = product.quantity > 0 ? (totalSubtracted / product.quantity) : 0;
+      const activityScore = productHistory.length;
+      
+      // Calculate opportunity score (0-100)
+      let opportunityScore = 0;
+      
+      // High turnover = good demand (30 points max)
+      opportunityScore += Math.min(30, turnoverRate * 10);
+      
+      // High activity = more attention (25 points max)
+      opportunityScore += Math.min(25, activityScore * 2);
+      
+      // High value products deserve focus (20 points max)
+      const maxProductValue = Math.max(...products.map(p => p.quantity * p.price), 1);
+      opportunityScore += 20 * (totalValue / maxProductValue);
+      
+      // Growth trend (25 points max)
+      if (productHistory.length >= 2) {
+        const recent = productHistory.slice(0, Math.floor(productHistory.length / 2)).length;
+        const older = productHistory.slice(Math.floor(productHistory.length / 2)).length;
+        if (older > 0 && recent > older) {
+          opportunityScore += 25;
+        } else if (older > 0) {
+          opportunityScore += 12 * (recent / older);
+        }
+      }
+      
+      return {
+        product,
+        metrics: {
+          totalAdded,
+          totalSubtracted,
+          totalValue,
+          turnoverRate: turnoverRate.toFixed(2),
+          activityScore,
+          opportunityScore: Math.min(100, Math.round(opportunityScore)),
+          transactionCount: productHistory.length
+        }
+      };
+    });
+
+    // Sort by opportunity score
+    productMetrics.sort((a, b) => b.metrics.opportunityScore - a.metrics.opportunityScore);
+
+    // TOP 3 products to focus on (high opportunity)
+    const topProducts = productMetrics.slice(0, Math.min(3, productMetrics.length));
+    topProducts.forEach(({ product, metrics }) => {
+      if (metrics.opportunityScore >= 50) {
+        suggestions.push({
+          type: 'trend',
+          priority: 'high',
+          title: `🎯 Focus on ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
+          description: `This is your strongest product with ${metrics.transactionCount} transactions, ₹${metrics.totalValue.toLocaleString()} in stock value, and ${metrics.turnoverRate}x turnover rate. It deserves more investment and attention.`,
+          action: `Increase stock buffer to ${Math.ceil(product.minStock * 2)}, consider bulk purchasing discounts, and feature this product prominently`,
+          impact: `Maximize returns on your best-performing product`,
+          productName: product.name,
+          data: {
+            opportunityScore: metrics.opportunityScore,
+            totalValue: metrics.totalValue,
+            turnoverRate: metrics.turnoverRate,
+            transactions: metrics.transactionCount,
+            recommendation: 'INCREASE_INVESTMENT'
+          }
+        });
+      }
+    });
+
+    // BOTTOM 3 products to reconsider (low opportunity)
+    const bottomProducts = productMetrics.slice(-Math.min(3, productMetrics.length)).reverse();
+    bottomProducts.forEach(({ product, metrics }) => {
+      if (metrics.opportunityScore < 30 && product.quantity > 0) {
+        const tiedCapital = product.quantity * product.price;
+        
+        let reason = '';
+        if (metrics.transactionCount === 0) {
+          reason = 'Zero transaction history';
+        } else if (metrics.turnoverRate < 0.5) {
+          reason = `Very low turnover (${metrics.turnoverRate}x)`;
+        } else {
+          reason = 'Low overall performance';
+        }
+        
+        suggestions.push({
+          type: 'dead_stock',
+          priority: 'medium',
+          title: `⚠️ Reconsider ${product.name} (Opportunity Score: ${metrics.opportunityScore}/100)`,
+          description: `${reason}. This product has ₹${tiedCapital.toLocaleString()} tied up in inventory with minimal activity. Consider if this product deserves continued investment.`,
+          action: `Either discontinue, liquidate at discount, or drastically reduce stock levels to free up ₹${tiedCapital.toLocaleString()}`,
+          impact: `Reallocate capital to higher-performing products`,
+          productName: product.name,
+          data: {
+            opportunityScore: metrics.opportunityScore,
+            tiedCapital,
+            turnoverRate: metrics.turnoverRate,
+            transactions: metrics.transactionCount,
+            recommendation: 'REDUCE_OR_DISCONTINUE'
+          }
+        });
+      }
+    });
+
+    // PORTFOLIO SUMMARY - Overall recommendation
+    if (products.length >= 5) {
+      const avgScore = productMetrics.reduce((sum, p) => sum + p.metrics.opportunityScore, 0) / productMetrics.length;
+      const highPerformers = productMetrics.filter(p => p.metrics.opportunityScore >= 60).length;
+      const lowPerformers = productMetrics.filter(p => p.metrics.opportunityScore < 30).length;
+      
+      let portfolioAdvice = '';
+      if (avgScore >= 60) {
+        portfolioAdvice = 'Your portfolio is strong. Most products show good activity. Consider expanding your best performers.';
+      } else if (avgScore >= 40) {
+        portfolioAdvice = `Moderate portfolio health. ${highPerformers} products performing well, ${lowPerformers} underperforming. Focus on the top performers and reconsider the bottom ones.`;
+      } else {
+        portfolioAdvice = `Portfolio needs attention. ${lowPerformers} products showing low activity. Consider pruning weak products and investing more in strong ones.`;
+      }
+      
+      suggestions.push({
+        type: 'pricing',
+        priority: 'low',
+        title: `📊 Portfolio Health: ${avgScore >= 50 ? 'Healthy' : 'Needs Work'} (Avg Score: ${Math.round(avgScore)}/100)`,
+        description: `You have ${products.length} products. ${highPerformers} are high-performers, ${lowPerformers} are underperformers. ${portfolioAdvice}`,
+        action: `Aim for 70%+ of products scoring above 50. Consider the 80/20 rule - 20% of products likely generate 80% of your results`,
+        impact: `Optimize product mix for maximum profitability`,
+        data: {
+          totalProducts: products.length,
+          avgScore: Math.round(avgScore),
+          highPerformers,
+          lowPerformers,
+          topProduct: topProducts[0]?.product.name,
+          recommendation: 'PORTFOLIO_OPTIMIZATION'
+        }
+      });
+    }
 
     return suggestions;
   }
