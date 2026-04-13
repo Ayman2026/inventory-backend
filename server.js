@@ -4,10 +4,12 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Product = require("./models/Product");
 const History = require("./models/History");
+const Suggestion = require("./models/Suggestion");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/auth");
 const authMiddleware = require("./middleware/auth");
+const aiSuggestionEngine = require("./utils/aiSuggestions");
 
 const app = express();
 
@@ -238,8 +240,8 @@ app.get("/history/top-movers", authMiddleware, async (req, res) => {
         moved = Math.abs(parseInt(entry.change.replace("-", "")) || 0);
       }
       movements[name].totalMoved += moved;
-      movements[name].lastActivity = new Date(entry.createdAt) > new Date(movements[name].lastActivity) 
-        ? entry.createdAt 
+      movements[name].lastActivity = new Date(entry.createdAt) > new Date(movements[name].lastActivity)
+        ? entry.createdAt
         : movements[name].lastActivity;
     });
 
@@ -249,6 +251,63 @@ app.get("/history/top-movers", authMiddleware, async (req, res) => {
       .slice(0, parseInt(limit));
 
     res.json(topMovers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- AI SUGGESTION ROUTES (Protected) ---
+
+// Get AI-powered business suggestions
+app.get("/suggestions", authMiddleware, async (req, res) => {
+  try {
+    const { type, priority } = req.query;
+    
+    // Generate fresh suggestions
+    const suggestions = await aiSuggestionEngine.generateSuggestions(req.user.id);
+    
+    // Filter by type if provided
+    let filtered = suggestions;
+    if (type && type !== 'all') {
+      filtered = filtered.filter(s => s.type === type);
+    }
+    
+    // Filter by priority if provided
+    if (priority && priority !== 'all') {
+      filtered = filtered.filter(s => s.priority === priority);
+    }
+
+    res.json(filtered);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dismiss a suggestion
+app.put("/suggestions/:id/dismiss", authMiddleware, async (req, res) => {
+  try {
+    const suggestion = await Suggestion.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { dismissed: true },
+      { new: true }
+    );
+    if (!suggestion) return res.status(404).json({ error: "Suggestion not found" });
+    res.json({ message: "Suggestion dismissed ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark suggestion as acted upon
+app.put("/suggestions/:id/act", authMiddleware, async (req, res) => {
+  try {
+    const suggestion = await Suggestion.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      { actedUpon: true },
+      { new: true }
+    );
+    if (!suggestion) return res.status(404).json({ error: "Suggestion not found" });
+    res.json({ message: "Suggestion marked as acted upon ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
