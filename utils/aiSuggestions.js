@@ -29,7 +29,82 @@ class AISuggestionEngine {
     const priorityOrder = { high: 0, medium: 1, low: 2 };
     suggestions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
-    return suggestions;
+    // Save/update suggestions in database to persist dismissal state
+    await this.saveSuggestions(userId, suggestions);
+
+    // Return saved suggestions with _id from database (only non-dismissed)
+    const savedSuggestions = await Suggestion.find({
+      userId,
+      dismissed: false
+    }).sort({ createdAt: -1 });
+
+    // Custom priority sorting: high -> medium -> low
+    savedSuggestions.sort((a, b) => {
+      return (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3);
+    });
+
+    return savedSuggestions;
+  }
+
+  /**
+   * Save generated suggestions to database
+   * @param {string} userId - The user's ID
+   * @param {Array} suggestions - Array of generated suggestion objects
+   */
+  async saveSuggestions(userId, suggestions) {
+    // Get existing non-dismissed suggestions
+    const existingSuggestions = await Suggestion.find({ 
+      userId, 
+      dismissed: false 
+    });
+
+    // Create a map of existing suggestions by type+productName for matching
+    const existingMap = new Map();
+    existingSuggestions.forEach(s => {
+      const key = `${s.type}_${s.productName || 'general'}`;
+      existingMap.set(key, s);
+    });
+
+    // Update or insert suggestions
+    for (const suggestion of suggestions) {
+      const key = `${suggestion.type}_${suggestion.productName || 'general'}`;
+      const existing = existingMap.get(key);
+
+      if (existing) {
+        // Update existing suggestion with new data but preserve dismissal state
+        await Suggestion.findByIdAndUpdate(existing._id, {
+          $set: {
+            title: suggestion.title,
+            description: suggestion.description,
+            action: suggestion.action,
+            impact: suggestion.impact,
+            data: suggestion.data,
+            priority: suggestion.priority
+          }
+        });
+      } else {
+        // Insert new suggestion
+        await Suggestion.create({
+          ...suggestion,
+          userId
+        });
+      }
+    }
+
+    // Mark suggestions that are no longer generated as dismissed (stale)
+    const currentKeys = new Set(suggestions.map(s => 
+      `${s.type}_${s.productName || 'general'}`
+    ));
+
+    for (const existing of existingSuggestions) {
+      const key = `${existing.type}_${existing.productName || 'general'}`;
+      if (!currentKeys.has(key)) {
+        // This suggestion is no longer relevant
+        await Suggestion.findByIdAndUpdate(existing._id, {
+          $set: { dismissed: true }
+        });
+      }
+    }
   }
 
   /**

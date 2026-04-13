@@ -261,23 +261,40 @@ app.get("/history/top-movers", authMiddleware, async (req, res) => {
 // Get AI-powered business suggestions
 app.get("/suggestions", authMiddleware, async (req, res) => {
   try {
-    const { type, priority } = req.query;
+    const { type, priority, includeDismissed } = req.query;
     
-    // Generate fresh suggestions
+    // Generate fresh suggestions and save to database
     const suggestions = await aiSuggestionEngine.generateSuggestions(req.user.id);
     
+    // Build query
+    const query = { userId: req.user.id };
+    
+    // Only show non-dismissed unless explicitly requested
+    if (includeDismissed !== 'true') {
+      query.dismissed = false;
+    }
+    
     // Filter by type if provided
-    let filtered = suggestions;
     if (type && type !== 'all') {
-      filtered = filtered.filter(s => s.type === type);
+      query.type = type;
     }
     
     // Filter by priority if provided
     if (priority && priority !== 'all') {
-      filtered = filtered.filter(s => s.priority === priority);
+      query.priority = priority;
     }
 
-    res.json(filtered);
+    // Fetch from database with filters
+    let filteredSuggestions = await Suggestion.find(query)
+      .sort({ createdAt: -1 });
+
+    // Custom priority sorting: high -> medium -> low
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    filteredSuggestions.sort((a, b) => {
+      return (priorityOrder[a.priority] || 3) - (priorityOrder[b.priority] || 3);
+    });
+
+    res.json(filteredSuggestions);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
