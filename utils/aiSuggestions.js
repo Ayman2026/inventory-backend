@@ -52,11 +52,8 @@ class AISuggestionEngine {
    * @param {Array} suggestions - Array of generated suggestion objects
    */
   async saveSuggestions(userId, suggestions) {
-    // Get existing non-dismissed suggestions
-    const existingSuggestions = await Suggestion.find({ 
-      userId, 
-      dismissed: false 
-    });
+    // Get ALL existing suggestions (including dismissed) to preserve dismissal state
+    const existingSuggestions = await Suggestion.find({ userId });
 
     // Create a map of existing suggestions by type+productName for matching
     const existingMap = new Map();
@@ -71,7 +68,8 @@ class AISuggestionEngine {
       const existing = existingMap.get(key);
 
       if (existing) {
-        // Update existing suggestion with new data but preserve dismissal state
+        // Update existing suggestion with new data
+        // IMPORTANT: Preserve dismissed and actedUpon state
         await Suggestion.findByIdAndUpdate(existing._id, {
           $set: {
             title: suggestion.title,
@@ -98,8 +96,8 @@ class AISuggestionEngine {
 
     for (const existing of existingSuggestions) {
       const key = `${existing.type}_${existing.productName || 'general'}`;
-      if (!currentKeys.has(key)) {
-        // This suggestion is no longer relevant
+      if (!currentKeys.has(key) && !existing.dismissed) {
+        // This suggestion is no longer relevant and wasn't already dismissed
         await Suggestion.findByIdAndUpdate(existing._id, {
           $set: { dismissed: true }
         });
