@@ -128,11 +128,30 @@ app.post("/history", authMiddleware, async (req, res) => {
   }
 });
 
-// Get all history (user's only)
+// Get all history (user's only) with pagination
 app.get("/history", authMiddleware, async (req, res) => {
   try {
-    const entries = await History.find({ userId: req.user.id }).sort({ createdAt: -1 });
-    res.json(entries);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const total = await History.countDocuments({ userId: req.user.id });
+    const entries = await History.find({ userId: req.user.id })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.json({
+      data: entries,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -159,18 +178,18 @@ app.delete("/history", authMiddleware, async (req, res) => {
   }
 });
 
-// Download history as CSV (user's only)
+// Download history as CSV (user's only) - Streamed for memory efficiency
 app.get("/history/download", authMiddleware, async (req, res) => {
   try {
     const { name, dateFrom, dateTo, type } = req.query;
-    
+
     const filter = { userId: req.user.id };
-    
+
     // Name filter
     if (name) {
       filter.name = { $regex: name, $options: "i" };
     }
-    
+
     // Date filter
     if (dateFrom || dateTo) {
       filter.createdAt = {};
@@ -183,74 +202,80 @@ app.get("/history/download", authMiddleware, async (req, res) => {
         filter.createdAt.$lte = toDate;
       }
     }
-    
-    const entries = await History.find(filter).sort({ createdAt: -1 });
-    
-    // Type filter (applied after query since it's based on change content)
-    let filtered = entries;
-    if (type && type !== "all") {
-      filtered = entries.filter(entry => {
-        if (type === "add") return entry.change.startsWith("+");
-        if (type === "subtract") return entry.change.startsWith("-");
-        if (type === "update") return entry.change.includes("Updated");
-        return true;
-      });
-    }
 
+    // Set CSV headers
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=history_export.csv");
+    
+    // Write CSV header
     const csvHeader = "Product,Change,Time,Note,Date\n";
-    const csvRows = filtered.map(entry => {
+    res.write(csvHeader);
+
+    // Stream data in chunks for memory efficiency
+    const cursor = History.find(filter).sort({ createdAt: -1 }).cursor();
+    
+    let isFirst = true;
+    for await (const entry of cursor) {
+      // Type filter (applied after query since it's based on change content)
+      if (type && type !== "all") {
+        if (type === "add" && !entry.change.startsWith("+")) continue;
+        if (type === "subtract" && !entry.change.startsWith("-")) continue;
+        if (type === "update" && !entry.change.includes("Updated")) continue;
+      }
+
       const name = `"${(entry.name || '').replace(/"/g, '""')}"`;
       const change = `"${(entry.change || '').replace(/"/g, '""')}"`;
       const time = `"${(entry.time || '').replace(/"/g, '""')}"`;
       const note = `"${(entry.note || '').replace(/"/g, '""')}"`;
       const date = new Date(entry.createdAt).toISOString();
-      return `${name},${change},${time},${note},${date}`;
-    }).join("\n");
+      
+      const row = `${name},${change},${time},${note},${date}\n`;
+      res.write(row);
+    }
 
-    const csv = csvHeader + csvRows;
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=history_export.csv");
-    res.send(csv);
+    res.end();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get top movers - products with highest stock movement velocity
+// Get top movers - products with highest stock movement velocity (Optimized with aggregation)
 app.get("/history/top-movers", authMiddleware, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
-    const entries = await History.find({ userId: req.user.id }).sort({ createdAt: -1 });
 
-    // Aggregate movements per product
-    const movements = {};
-    entries.forEach(entry => {
-      const name = entry.name;
-      if (!movements[name]) {
-        movements[name] = { name, totalMoved: 0, transactions: 0, lastActivity: entry.createdAt };
-      }
-      movements[name].transactions += 1;
+    // Use MongoDB aggregation pipeline for efficiency
+    const topMovers = await History.aggregate([
+      { $match: { userId: req.user.id } },
+      {
+        $group: {
+          _id: "$name",
+          totalMoved: {
+            $sum: {
+              $abs: {
+                $toDouble: {
+                  $substr: ["$change", 1, { $strLenCP: "$change" }]
+                }
+              }
+            }
+          },
+          transactions: { $sum: 1 },
+          lastActivity: { $max: "$createdAt" }
+        }
+      },
+      { $sort: { totalMoved: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
-      // Parse the change value (e.g., "+50" -> 50, "-20" -> 20, "Updated Product" -> 0)
-      let moved = 0;
-      if (entry.change.startsWith("+")) {
-        moved = parseInt(entry.change.replace("+", "")) || 0;
-      } else if (entry.change.startsWith("-")) {
-        moved = Math.abs(parseInt(entry.change.replace("-", "")) || 0);
-      }
-      movements[name].totalMoved += moved;
-      movements[name].lastActivity = new Date(entry.createdAt) > new Date(movements[name].lastActivity)
-        ? entry.createdAt
-        : movements[name].lastActivity;
-    });
+    // Format response to match existing structure
+    const formattedMovers = topMovers.map(mover => ({
+      name: mover._id,
+      totalMoved: Math.round(mover.totalMoved),
+      transactions: mover.transactions,
+      lastActivity: mover.lastActivity
+    }));
 
-    // Convert to array and sort by total movement
-    const topMovers = Object.values(movements)
-      .sort((a, b) => b.totalMoved - a.totalMoved)
-      .slice(0, parseInt(limit));
-
-    res.json(topMovers);
+    res.json(formattedMovers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

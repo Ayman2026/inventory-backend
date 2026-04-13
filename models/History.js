@@ -8,4 +8,9 @@ const historySchema = new mongoose.Schema({
   userId: { type: String, required: true }
 }, { timestamps: true });
 
+// Indexes for fast queries
+historySchema.index({ userId: 1 });
+historySchema.index({ userId: 1, createdAt: -1 });
+historySchema.index({ userId: 1, name: 1 });
+
 module.exports = mongoose.model("History", historySchema);

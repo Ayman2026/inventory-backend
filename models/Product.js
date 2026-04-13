@@ -8,4 +8,8 @@ const productSchema = new mongoose.Schema({
   userId: { type: String, required: true }
 }, { timestamps: true });
 
+// Indexes for fast queries
+productSchema.index({ userId: 1 });
+productSchema.index({ name: 1 });
+
 module.exports = mongoose.model("Product", productSchema);

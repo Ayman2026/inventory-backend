@@ -12,18 +12,25 @@ class AISuggestionEngine {
     const products = await Product.find({ userId });
     const history = await History.find({ userId }).sort({ createdAt: -1 });
 
+    // Pre-group history by product name (O(N) instead of O(N²))
+    const historyByProduct = new Map();
+    history.forEach(h => {
+      if (!historyByProduct.has(h.name)) historyByProduct.set(h.name, []);
+      historyByProduct.get(h.name).push(h);
+    });
+
     const suggestions = [];
 
-    // Run all analysis engines
-    suggestions.push(...this.analyzeReorderNeeds(products, history));
-    suggestions.push(...this.identifyDeadStock(products, history));
-    suggestions.push(...this.identifyFastMovers(products, history));
-    suggestions.push(...this.analyzePricing(products, history));
-    suggestions.push(...this.detectSeasonalTrends(products, history));
-    suggestions.push(...this.suggestBundles(products, history));
-    suggestions.push(...this.identifyClearanceCandidates(products, history));
-    suggestions.push(...this.analyzeTrends(products, history));
-    suggestions.push(...this.recommendProductFocus(products, history));
+    // Run all analysis engines with pre-grouped data
+    suggestions.push(...this.analyzeReorderNeeds(products, history, historyByProduct));
+    suggestions.push(...this.identifyDeadStock(products, history, historyByProduct));
+    suggestions.push(...this.identifyFastMovers(products, history, historyByProduct));
+    suggestions.push(...this.analyzePricing(products, history, historyByProduct));
+    suggestions.push(...this.detectSeasonalTrends(products, history, historyByProduct));
+    suggestions.push(...this.suggestBundles(products, history, historyByProduct));
+    suggestions.push(...this.identifyClearanceCandidates(products, history, historyByProduct));
+    suggestions.push(...this.analyzeTrends(products, history, historyByProduct));
+    suggestions.push(...this.recommendProductFocus(products, history, historyByProduct));
 
     // Sort by priority (high > medium > low)
     const priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -33,9 +40,9 @@ class AISuggestionEngine {
     await this.saveSuggestions(userId, suggestions);
 
     // Return saved suggestions with _id from database (only non-dismissed)
-    const savedSuggestions = await Suggestion.find({
-      userId,
-      dismissed: false
+    const savedSuggestions = await Suggestion.find({ 
+      userId, 
+      dismissed: false 
     }).sort({ createdAt: -1 });
 
     // Custom priority sorting: high -> medium -> low
@@ -108,13 +115,13 @@ class AISuggestionEngine {
   /**
    * 1. REORDER SUGGESTIONS - Products running low fast
    */
-  analyzeReorderNeeds(products, history) {
+  analyzeReorderNeeds(products, history, historyByProduct) {
     const suggestions = [];
 
     products.forEach(product => {
       if (product.quantity <= product.minStock) {
-        // Calculate consumption rate from history
-        const productHistory = history.filter(h => h.name === product.name);
+        // Use pre-grouped history (O(1) lookup instead of O(N) filter)
+        const productHistory = historyByProduct.get(product.name) || [];
         const additions = productHistory.filter(h => h.change.startsWith('+'));
         const subtractions = productHistory.filter(h => h.change.startsWith('-'));
 
@@ -173,12 +180,12 @@ class AISuggestionEngine {
   /**
    * 2. DEAD STOCK - Products with no movement
    */
-  identifyDeadStock(products, history) {
+  identifyDeadStock(products, history, historyByProduct) {
     const suggestions = [];
 
     products.forEach(product => {
-      const productHistory = history.filter(h => h.name === product.name);
-      
+      const productHistory = historyByProduct.get(product.name) || [];
+
       if (productHistory.length === 0 && product.quantity > 0) {
         const daysSinceAdded = Math.max(1, (new Date() - new Date(product.createdAt)) / (1000 * 60 * 60 * 24));
         
@@ -231,7 +238,7 @@ class AISuggestionEngine {
   /**
    * 3. FAST MOVERS - High velocity products
    */
-  identifyFastMovers(products, history) {
+  identifyFastMovers(products, history, historyByProduct) {
     const suggestions = [];
     const movements = {};
 
@@ -284,7 +291,7 @@ class AISuggestionEngine {
   /**
    * 4. PRICING INSIGHTS - Revenue optimization
    */
-  analyzePricing(products, history) {
+  analyzePricing(products, history, historyByProduct) {
     const suggestions = [];
     const totalValue = products.reduce((sum, p) => sum + (p.quantity * p.price), 0);
     const avgPrice = products.length > 0 ? totalValue / products.reduce((sum, p) => sum + p.quantity, 1) : 0;
@@ -336,7 +343,7 @@ class AISuggestionEngine {
   /**
    * 5. SEASONAL TRENDS - Time-based patterns
    */
-  detectSeasonalTrends(products, history) {
+  detectSeasonalTrends(products, history, historyByProduct) {
     const suggestions = [];
     
     if (history.length < 10) return suggestions; // Need enough data
@@ -390,7 +397,7 @@ class AISuggestionEngine {
   /**
    * 6. BUNDLE SUGGESTIONS - Products that move together
    */
-  suggestBundles(products, history) {
+  suggestBundles(products, history, historyByProduct) {
     const suggestions = [];
 
     if (history.length < 5) return suggestions;
@@ -447,12 +454,12 @@ class AISuggestionEngine {
   /**
    * 7. CLEARANCE CANDIDATES - Overstocked items
    */
-  identifyClearanceCandidates(products, history) {
+  identifyClearanceCandidates(products, history, historyByProduct) {
     const suggestions = [];
 
     products.forEach(product => {
       if (product.quantity > product.minStock * 3) {
-        const productHistory = history.filter(h => h.name === product.name);
+        const productHistory = historyByProduct.get(product.name) || [];
         const recentSubtractions = productHistory
           .filter(h => h.change.startsWith('-'))
           .slice(0, 10);
@@ -498,7 +505,7 @@ class AISuggestionEngine {
   /**
    * 8. TREND ANALYSIS - Growing/declining products
    */
-  analyzeTrends(products, history) {
+  analyzeTrends(products, history, historyByProduct) {
     const suggestions = [];
 
     if (history.length < 20) return suggestions;
@@ -549,14 +556,14 @@ class AISuggestionEngine {
   /**
    * 9. PRODUCT FOCUS RECOMMENDATIONS - Which products to focus on
    */
-  recommendProductFocus(products, history) {
+  recommendProductFocus(products, history, historyByProduct) {
     const suggestions = [];
 
     if (products.length === 0) return suggestions;
 
     // Calculate metrics for each product
     const productMetrics = products.map(product => {
-      const productHistory = history.filter(h => h.name === product.name);
+      const productHistory = historyByProduct.get(product.name) || [];
       
       // Calculate movement metrics
       const additions = productHistory.filter(h => h.change.startsWith('+'));
@@ -602,10 +609,43 @@ class AISuggestionEngine {
           totalValue,
           turnoverRate: turnoverRate.toFixed(2),
           activityScore,
-          opportunityScore: Math.min(100, Math.round(opportunityScore)),
+          opportunityScore: 0, // Will be calculated after maxProductValue
           transactionCount: productHistory.length
         }
       };
+    });
+
+    // Calculate maxProductValue ONCE (not inside the loop)
+    const maxProductValue = productMetrics.reduce((max, p) => 
+      Math.max(max, p.metrics.totalValue), 1
+    );
+
+    // Now calculate opportunity scores with the precomputed maxProductValue
+    productMetrics.forEach(pm => {
+      const { turnoverRate, activityScore, totalValue, transactionCount } = pm.metrics;
+      let opportunityScore = 0;
+
+      // High turnover = good demand (30 points max)
+      opportunityScore += Math.min(30, turnoverRate * 10);
+
+      // High activity = more attention (25 points max)
+      opportunityScore += Math.min(25, activityScore * 2);
+
+      // High value products deserve focus (20 points max)
+      opportunityScore += 20 * (totalValue / maxProductValue);
+
+      // Growth trend (25 points max)
+      if (transactionCount >= 2) {
+        const recent = Math.floor(transactionCount / 2);
+        const older = transactionCount - recent;
+        if (older > 0 && recent > older) {
+          opportunityScore += 25;
+        } else if (older > 0) {
+          opportunityScore += 12 * (recent / older);
+        }
+      }
+
+      pm.metrics.opportunityScore = Math.min(100, Math.round(opportunityScore));
     });
 
     // Sort by opportunity score
