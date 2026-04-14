@@ -65,7 +65,18 @@ app.get("/products", authMiddleware, async (req, res) => {
 // Download products as CSV (user's only)
 app.get("/products/download", authMiddleware, async (req, res) => {
   try {
-    const products = await Product.find({ userId: req.user.id })
+    const { category, subcategory } = req.query;
+    
+    // Build filter
+    const filter = { userId: req.user.id };
+    if (category) {
+      filter.category = category;
+    }
+    if (subcategory) {
+      filter.subcategory = subcategory;
+    }
+
+    const products = await Product.find(filter)
       .populate("category", "name")
       .populate("subcategory", "name")
       .sort({ name: 1 });
@@ -85,7 +96,7 @@ app.get("/products/download", authMiddleware, async (req, res) => {
 
     // Calculate grand total
     const grandTotal = products.reduce((sum, p) => sum + ((p.quantity || 0) * (p.price || 0)), 0);
-    const totalRow = `\nGRAND TOTAL,,,,,${grandTotal},,`;
+    const totalRow = `\nGRAND TOTAL,,,${grandTotal},,,,`;
 
     const csv = csvHeader + csvRows + totalRow;
 
