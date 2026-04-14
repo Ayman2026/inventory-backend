@@ -65,7 +65,7 @@ app.get("/products", authMiddleware, async (req, res) => {
 // Download products as CSV (user's only)
 app.get("/products/download", authMiddleware, async (req, res) => {
   try {
-    const { category, subcategory } = req.query;
+    const { category, subcategory, search } = req.query;
     
     // Build filter
     const filter = { userId: req.user.id };
@@ -74,6 +74,9 @@ app.get("/products/download", authMiddleware, async (req, res) => {
     }
     if (subcategory) {
       filter.subcategory = subcategory;
+    }
+    if (search) {
+      filter.name = { $regex: search, $options: "i" }; // Case-insensitive search
     }
 
     const products = await Product.find(filter)
