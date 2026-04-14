@@ -5,6 +5,8 @@ const mongoose = require("mongoose");
 const Product = require("./models/Product");
 const History = require("./models/History");
 const Suggestion = require("./models/Suggestion");
+const Category = require("./models/Category");
+const Subcategory = require("./models/Subcategory");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/auth");
@@ -51,7 +53,9 @@ app.post("/products", authMiddleware, async (req, res) => {
 // Get all products (user's only)
 app.get("/products", authMiddleware, async (req, res) => {
   try {
-    const products = await Product.find({ userId: req.user.id });
+    const products = await Product.find({ userId: req.user.id })
+      .populate("category", "name")
+      .populate("subcategory", "name");
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -61,23 +65,27 @@ app.get("/products", authMiddleware, async (req, res) => {
 // Download products as CSV (user's only)
 app.get("/products/download", authMiddleware, async (req, res) => {
   try {
-    const products = await Product.find({ userId: req.user.id }).sort({ name: 1 });
+    const products = await Product.find({ userId: req.user.id })
+      .populate("category", "name")
+      .populate("subcategory", "name")
+      .sort({ name: 1 });
 
-    const csvHeader = "Name,Quantity,Price,Total Worth,Min Stock,Category,Date Added\n";
+    const csvHeader = "Name,Quantity,Price,Total Worth,Min Stock,Category,Subcategory,Date Added\n";
     const csvRows = products.map(product => {
       const name = `"${(product.name || '').replace(/"/g, '""')}"`;
       const quantity = product.quantity || 0;
       const price = product.price || 0;
       const totalWorth = quantity * price;
       const minStock = product.minStock || 0;
-      const category = `"${(product.category || '').replace(/"/g, '""')}"`;
+      const category = `"${((product.category && product.category.name) || '').replace(/"/g, '""')}"`;
+      const subcategory = `"${((product.subcategory && product.subcategory.name) || '').replace(/"/g, '""')}"`;
       const date = new Date(product.createdAt).toISOString();
-      return `${name},${quantity},${price},${totalWorth},${minStock},${category},${date}`;
+      return `${name},${quantity},${price},${totalWorth},${minStock},${category},${subcategory},${date}`;
     }).join("\n");
 
     // Calculate grand total
     const grandTotal = products.reduce((sum, p) => sum + ((p.quantity || 0) * (p.price || 0)), 0);
-    const totalRow = `\nGRAND TOTAL,,,,${grandTotal},,`;
+    const totalRow = `\nGRAND TOTAL,,,,,${grandTotal},,`;
 
     const csv = csvHeader + csvRows + totalRow;
 
@@ -110,6 +118,82 @@ app.delete("/products/:id", authMiddleware, async (req, res) => {
     const deleted = await Product.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
     if (!deleted) return res.status(404).json({ error: "Product not found" });
     res.json({ message: "Product deleted ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- CATEGORY ROUTES (Protected) ---
+
+// Get all categories
+app.get("/categories", authMiddleware, async (req, res) => {
+  try {
+    const categories = await Category.find({ userId: req.user.id }).sort({ name: 1 });
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create category
+app.post("/categories", authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const category = new Category({ name, userId: req.user.id });
+    await category.save();
+    res.json(category);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete category (also deletes associated subcategories)
+app.delete("/categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const category = await Category.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!category) return res.status(404).json({ error: "Category not found" });
+    await Subcategory.deleteMany({ categoryId: req.params.id, userId: req.user.id });
+    res.json({ message: "Category and its subcategories deleted ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SUBCATEGORY ROUTES (Protected) ---
+
+// Get subcategories by category
+app.get("/subcategories", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId } = req.query;
+    const filter = { userId: req.user.id };
+    if (categoryId) {
+      filter.categoryId = categoryId;
+    }
+    const subcategories = await Subcategory.find(filter).sort({ name: 1 });
+    res.json(subcategories);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create subcategory
+app.post("/subcategories", authMiddleware, async (req, res) => {
+  try {
+    const { name, categoryId } = req.body;
+    const subcategory = new Subcategory({ name, categoryId, userId: req.user.id });
+    await subcategory.save();
+    res.json(subcategory);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete subcategory
+app.delete("/subcategories/:id", authMiddleware, async (req, res) => {
+  try {
+    const subcategory = await Subcategory.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!subcategory) return res.status(404).json({ error: "Subcategory not found" });
+    res.json({ message: "Subcategory deleted ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -5,6 +5,8 @@ const productSchema = new mongoose.Schema({
   quantity: Number,
   price: Number,
   minStock: Number,
+  category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+  subcategory: { type: mongoose.Schema.Types.ObjectId, ref: "Subcategory" },
   userId: { type: String, required: true }
 }, { timestamps: true });
 
