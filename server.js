@@ -123,6 +123,56 @@ app.delete("/products/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Product Received - Add stock
+app.post("/products/:id/receive", authMiddleware, async (req, res) => {
+  try {
+    const { quantity, note } = req.body;
+    const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    product.quantity += Number(quantity);
+    await product.save();
+
+    // Add to history
+    await History.create({
+      name: product.name,
+      change: `+${quantity}`,
+      time: new Date().toLocaleString(),
+      note: note || "Product Received",
+      userId: req.user.id
+    });
+
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Product Dispatched - Subtract stock
+app.post("/products/:id/dispatch", authMiddleware, async (req, res) => {
+  try {
+    const { quantity, note } = req.body;
+    const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
+    if (!product) return res.status(404).json({ error: "Product not found" });
+
+    product.quantity = Math.max(0, product.quantity - Number(quantity));
+    await product.save();
+
+    // Add to history
+    await History.create({
+      name: product.name,
+      change: `-${quantity}`,
+      time: new Date().toLocaleString(),
+      note: note || "Product Dispatched",
+      userId: req.user.id
+    });
+
+    res.json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- CATEGORY ROUTES (Protected) ---
 
 // Get all categories
