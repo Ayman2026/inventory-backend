@@ -176,7 +176,16 @@ app.post("/products/:id/dispatch", authMiddleware, async (req, res) => {
     const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
     if (!product) return res.status(404).json({ error: "Product not found" });
 
-    product.quantity = Math.max(0, product.quantity - Number(quantity));
+    const dispatchQty = Number(quantity);
+    
+    // Validation: Cannot dispatch more than available good products
+    if (dispatchQty > product.quantity) {
+      return res.status(400).json({ 
+        error: `Cannot dispatch ${dispatchQty} units. Only ${product.quantity} good products available.` 
+      });
+    }
+
+    product.quantity = Math.max(0, product.quantity - dispatchQty);
     await product.save();
 
     // Add to history
