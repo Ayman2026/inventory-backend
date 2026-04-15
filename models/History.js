@@ -5,6 +5,8 @@ const historySchema = new mongoose.Schema({
   change: String,
   time: String,
   note: String,
+  supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
+  dealer: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
   userId: { type: String, required: true }
 }, { timestamps: true });
 

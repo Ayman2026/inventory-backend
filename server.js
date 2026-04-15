@@ -147,7 +147,7 @@ app.delete("/products/:id", authMiddleware, async (req, res) => {
 // Product Received - Add stock
 app.post("/products/:id/receive", authMiddleware, async (req, res) => {
   try {
-    const { quantity, damagedQuantity, note } = req.body;
+    const { quantity, damagedQuantity, note, supplier } = req.body;
     const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
     if (!product) return res.status(404).json({ error: "Product not found" });
 
@@ -167,6 +167,7 @@ app.post("/products/:id/receive", authMiddleware, async (req, res) => {
       change: changeText,
       time: new Date().toLocaleString(),
       note: note || "Product Received",
+      supplier: supplier || null,
       userId: req.user.id
     });
 
@@ -179,7 +180,7 @@ app.post("/products/:id/receive", authMiddleware, async (req, res) => {
 // Product Dispatched - Subtract stock
 app.post("/products/:id/dispatch", authMiddleware, async (req, res) => {
   try {
-    const { quantity, note } = req.body;
+    const { quantity, note, dealer } = req.body;
     const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
     if (!product) return res.status(404).json({ error: "Product not found" });
 
@@ -201,6 +202,7 @@ app.post("/products/:id/dispatch", authMiddleware, async (req, res) => {
       change: `-${quantity}`,
       time: new Date().toLocaleString(),
       note: note || "Product Dispatched",
+      dealer: dealer || null,
       userId: req.user.id
     });
 
@@ -310,6 +312,8 @@ app.get("/history", authMiddleware, async (req, res) => {
     const [total, entries] = await Promise.all([
       History.countDocuments({ userId: req.user.id }),
       History.find({ userId: req.user.id })
+        .populate("supplier", "name")
+        .populate("dealer", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
