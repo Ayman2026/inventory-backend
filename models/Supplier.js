@@ -14,4 +14,7 @@ const supplierSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
 }, { timestamps: true });
 
+// Index for fast queries
+supplierSchema.index({ userId: 1, name: 1 });
+
 module.exports = mongoose.model("Supplier", supplierSchema);

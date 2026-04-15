@@ -59,7 +59,8 @@ app.get("/products", authMiddleware, async (req, res) => {
       .populate("category", "name")
       .populate("subcategory", "name")
       .populate("supplier", "name")
-      .populate("dealer", "name");
+      .populate("dealer", "name")
+      .lean(); // Convert to plain JS objects for better performance
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -212,7 +213,7 @@ app.post("/products/:id/dispatch", authMiddleware, async (req, res) => {
 // Get all categories
 app.get("/categories", authMiddleware, async (req, res) => {
   try {
-    const categories = await Category.find({ userId: req.user.id }).sort({ name: 1 });
+    const categories = await Category.find({ userId: req.user.id }).sort({ name: 1 }).lean();
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -253,7 +254,7 @@ app.get("/subcategories", authMiddleware, async (req, res) => {
     if (categoryId) {
       filter.categoryId = categoryId;
     }
-    const subcategories = await Subcategory.find(filter).sort({ name: 1 });
+    const subcategories = await Subcategory.find(filter).sort({ name: 1 }).lean();
     res.json(subcategories);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -303,11 +304,15 @@ app.get("/history", authMiddleware, async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const skip = (page - 1) * limit;
 
-    const total = await History.countDocuments({ userId: req.user.id });
-    const entries = await History.find({ userId: req.user.id })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    // Run count and find in parallel for better performance
+    const [total, entries] = await Promise.all([
+      History.countDocuments({ userId: req.user.id }),
+      History.find({ userId: req.user.id })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean()
+    ]);
 
     res.json({
       data: entries,
@@ -415,7 +420,8 @@ app.get("/history/top-movers", authMiddleware, async (req, res) => {
     // Fetch history and process in Node.js (more reliable than complex aggregation)
     const entries = await History.find({ userId: req.user.id })
       .sort({ createdAt: -1 })
-      .limit(1000); // Limit to last 1000 entries for performance
+      .limit(1000)
+      .lean(); // Limit to last 1000 entries for performance
 
     // Aggregate movements per product
     const movements = {};
@@ -531,7 +537,7 @@ app.put("/suggestions/:id/act", authMiddleware, async (req, res) => {
 // Get all suppliers
 app.get("/suppliers", authMiddleware, async (req, res) => {
   try {
-    const suppliers = await Supplier.find({ userId: req.user.id }).sort({ name: 1 });
+    const suppliers = await Supplier.find({ userId: req.user.id }).sort({ name: 1 }).lean();
     res.json(suppliers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -580,7 +586,7 @@ app.delete("/suppliers/:id", authMiddleware, async (req, res) => {
 // Get all dealers
 app.get("/dealers", authMiddleware, async (req, res) => {
   try {
-    const dealers = await Dealer.find({ userId: req.user.id }).sort({ name: 1 });
+    const dealers = await Dealer.find({ userId: req.user.id }).sort({ name: 1 }).lean();
     res.json(dealers);
   } catch (err) {
     res.status(500).json({ error: err.message });
