@@ -39,7 +39,7 @@ router.post("/demo", async (req, res) => {
     const token = jwt.sign(
       { id: user._id, googleId: user.googleId, email: user.email, name: user.name },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "30d" } // Extended to 30 days
     );
 
     res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
@@ -95,7 +95,7 @@ console.log("Google OAuth Redirect URI:", REDIRECT_URI);
     const token = jwt.sign(
       { id: user._id, googleId: user.googleId, email: user.email, name: user.name },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "30d" } // Extended to 30 days
     );
 
     // Redirect to frontend with token
