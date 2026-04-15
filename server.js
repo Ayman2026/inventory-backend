@@ -57,7 +57,9 @@ app.get("/products", authMiddleware, async (req, res) => {
   try {
     const products = await Product.find({ userId: req.user.id })
       .populate("category", "name")
-      .populate("subcategory", "name");
+      .populate("subcategory", "name")
+      .populate("supplier", "name")
+      .populate("dealer", "name");
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });

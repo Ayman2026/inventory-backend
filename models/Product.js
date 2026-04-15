@@ -8,6 +8,8 @@ const productSchema = new mongoose.Schema({
   damagedQuantity: { type: Number, default: 0 },
   category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
   subcategory: { type: mongoose.Schema.Types.ObjectId, ref: "Subcategory" },
+  supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier" },
+  dealer: { type: mongoose.Schema.Types.ObjectId, ref: "Dealer" },
   userId: { type: String, required: true }
 }, { timestamps: true });
 
