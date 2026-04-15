@@ -7,6 +7,8 @@ const History = require("./models/History");
 const Suggestion = require("./models/Suggestion");
 const Category = require("./models/Category");
 const Subcategory = require("./models/Subcategory");
+const Supplier = require("./models/Supplier");
+const Dealer = require("./models/Dealer");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const authRoutes = require("./routes/auth");
@@ -523,6 +525,104 @@ app.put("/suggestions/:id/act", authMiddleware, async (req, res) => {
     );
     if (!suggestion) return res.status(404).json({ error: "Suggestion not found" });
     res.json({ message: "Suggestion marked as acted upon ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- SUPPLIER ROUTES (Protected) ---
+
+// Get all suppliers
+app.get("/suppliers", authMiddleware, async (req, res) => {
+  try {
+    const suppliers = await Supplier.find({ userId: req.user.id }).sort({ name: 1 }).lean();
+    res.json(suppliers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create supplier
+app.post("/suppliers", authMiddleware, async (req, res) => {
+  try {
+    const supplier = new Supplier({ ...req.body, userId: req.user.id });
+    await supplier.save();
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update supplier
+app.put("/suppliers/:id", authMiddleware, async (req, res) => {
+  try {
+    const supplier = await Supplier.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      req.body,
+      { new: true }
+    );
+    if (!supplier) return res.status(404).json({ error: "Supplier not found" });
+    res.json(supplier);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete supplier
+app.delete("/suppliers/:id", authMiddleware, async (req, res) => {
+  try {
+    const supplier = await Supplier.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!supplier) return res.status(404).json({ error: "Supplier not found" });
+    res.json({ message: "Supplier deleted ✅" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- DEALER ROUTES (Protected) ---
+
+// Get all dealers
+app.get("/dealers", authMiddleware, async (req, res) => {
+  try {
+    const dealers = await Dealer.find({ userId: req.user.id }).sort({ name: 1 }).lean();
+    res.json(dealers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create dealer
+app.post("/dealers", authMiddleware, async (req, res) => {
+  try {
+    const dealer = new Dealer({ ...req.body, userId: req.user.id });
+    await dealer.save();
+    res.json(dealer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update dealer
+app.put("/dealers/:id", authMiddleware, async (req, res) => {
+  try {
+    const dealer = await Dealer.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user.id },
+      req.body,
+      { new: true }
+    );
+    if (!dealer) return res.status(404).json({ error: "Dealer not found" });
+    res.json(dealer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete dealer
+app.delete("/dealers/:id", authMiddleware, async (req, res) => {
+  try {
+    const dealer = await Dealer.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+    if (!dealer) return res.status(404).json({ error: "Dealer not found" });
+    res.json({ message: "Dealer deleted ✅" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
