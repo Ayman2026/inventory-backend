@@ -29,8 +29,12 @@ app.use(cookieParser());
 // Auth routes (no auth required)
 app.use("/auth", authRoutes);
 
-// MongoDB connect
-mongoose.connect(process.env.MONGO_URI)
+// MongoDB connect with optimized settings
+mongoose.connect(process.env.MONGO_URI, {
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log(err));
 
