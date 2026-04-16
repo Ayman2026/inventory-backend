@@ -151,16 +151,23 @@ app.post("/products/:id/receive", authMiddleware, async (req, res) => {
     const product = await Product.findOne({ _id: req.params.id, userId: req.user.id });
     if (!product) return res.status(404).json({ error: "Product not found" });
 
-    product.quantity += Number(quantity);
-    if (damagedQuantity) {
-      product.damagedQuantity = (product.damagedQuantity || 0) + Number(damagedQuantity);
+    // quantity = TOTAL products received
+    // damagedQuantity = damaged products received
+    // good = total - damaged
+    const totalReceived = Number(quantity);
+    const damaged = Number(damagedQuantity) || 0;
+    const goodQuantity = totalReceived - damaged;
+
+    product.quantity += goodQuantity;
+    if (damaged > 0) {
+      product.damagedQuantity = (product.damagedQuantity || 0) + damaged;
     }
     await product.save();
 
     // Add to history
-    const changeText = damagedQuantity 
-      ? `+${quantity} (${damagedQuantity} damaged)`
-      : `+${quantity}`;
+    const changeText = damaged > 0
+      ? `+${totalReceived} (${goodQuantity} good, ${damaged} damaged)`
+      : `+${totalReceived}`;
     
     await History.create({
       name: product.name,
